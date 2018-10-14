@@ -1,0 +1,1 @@
+print(format(21,'#10b'))
