@@ -8,6 +8,8 @@ from pymodbus.client.sync import ModbusTcpClient as ModbusClient
 # --------------------------------------------------------------------------- # 
 import logging
 import struct
+from time import sleep
+
 logging.basicConfig()
 log = logging.getLogger()
 # log.setLevel(logging.DEBUG)
@@ -24,12 +26,30 @@ def run_sync_client():
     client.connect()
     print("Connected")
 
-# Reku
-    for i in range(0,4):
-        print("Reading reg ",i)
-        reg = client.read_input_registers(2*i, 2)
-        s = struct.pack('<HH',reg.registers[0],reg.registers[1])
-        print(i,' ',struct.unpack('f',s))
+    powers = [0.2, 0.5, 0.333, 0.35]
+    for i in range(4):
+        power = powers[i]
+    # Reku
+        setPower2(client, power)
+
+#does not work :-(
+def setPower1(client, power):
+    print("Setting power to:", power)
+    s = struct.pack('f', power)
+    i1, i2 = struct.unpack('<HH', s)
+    client.write_register(20 * 2, i1)
+    client.write_register(20 * 2 + 1, i2)
+    sleep(10)
+    print("done with ", power)
+
+def setPower2(client, power):
+    print("Setting power to:", power)
+    s = struct.pack('f', power)
+    i1, i2 = struct.unpack('<HH', s)
+    client.write_register(6 * 2, i1)
+    client.write_register(6 * 2 + 1, i2)
+    sleep(10)
+    print("done with ", power)
 
 
 run_sync_client()
