@@ -26,30 +26,34 @@ def run_sync_client():
     client.connect()
     print("Connected")
 
-    powers = [0.2, 0.5, 0.333, 0.35]
-    for i in range(4):
-        power = powers[i]
+    powers = [float(0), float(15.15), float(18.18), float(20.20), float(22.22)]
+    for i in range(40):
+        power = powers[i%5]
     # Reku
-        setPower2(client, power)
+        setPower1(client, power)
+        # setPower(client, power, 0)
 
 #does not work :-(
 def setPower1(client, power):
     print("Setting power to:", power)
-    s = struct.pack('f', power)
-    i1, i2 = struct.unpack('<HH', s)
-    client.write_register(20 * 2, i1)
-    client.write_register(20 * 2 + 1, i2)
-    sleep(10)
+    s = struct.pack('>f', power)
+    i1, i2 = struct.unpack('>HH', s)
+    client.write_register(6, i2)
+    client.write_register(6 + 1, i1)
+    sleep(5)
     print("done with ", power)
 
-def setPower2(client, power):
-    print("Setting power to:", power)
+def setPower2(client, power,regOffset):
+    print("Setting power for: ",2+regOffset,"to :", power)
+    # client.write_register(6, 0xFF)
     s = struct.pack('f', power)
-    i1, i2 = struct.unpack('<HH', s)
-    client.write_register(6 * 2, i1)
-    client.write_register(6 * 2 + 1, i2)
+    i1, i2 = struct.unpack('>HH', s)
+    client.write_register(6, i1)
+    client.write_register(8, i2)
+    # client.write_register(6 + 1, i2)
     sleep(10)
     print("done with ", power)
-
+    client.write_register(6, 0)
+    sleep(10)
 
 run_sync_client()
