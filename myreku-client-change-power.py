@@ -26,9 +26,10 @@ def run_sync_client():
     client.connect()
     print("Connected")
 
-    powers = [float(0), float(15.15), float(18.18), float(20.20), float(22.22)]
-    for i in range(40):
-        power = powers[i%5]
+    powers = [float(0), float(15.15), float(18.18), float(20.20), float(22.22), float(33.3),
+              float(27.27),float(10.10),float(5.5),float(0)]
+    for i in range(len(powers)*10):
+        power = powers[i%len(powers)]
     # Reku
         setPower1(client, power)
         # setPower(client, power, 0)
