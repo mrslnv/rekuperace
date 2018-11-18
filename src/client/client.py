@@ -1,6 +1,7 @@
 from pymodbus.client.sync import ModbusTcpClient as ModbusClient
 import logging
 import struct
+import numpy as np
 
 class AbstractClient:
     def __init__(self):
@@ -26,12 +27,17 @@ class VentboxClient(AbstractClient):
 
     def setPower(self,power:int) -> None:
         self.power = power
+        s = struct.pack('>f', power)
+        i1, i2 = struct.unpack('>HH', s)
+        self.client.write_register(6, i2)
+        self.client.write_register(6 + 1, i1)
 
 
 class TestClient(AbstractClient):
     def __init__(self) -> None:
         super().__init__()
         self.i = -1
+        self.data = np.empty(500)
         for x in range(100):
             self.data[5*x] = 5.1
             self.data[5*x+1] = 5.2
