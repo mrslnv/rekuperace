@@ -25,7 +25,7 @@ RESTART_DELAY = 600
 
 def now():
     return strftime('%H:%M:%S %d.%m.',time.localtime(time.time()))
-
+	
 while True:
     try:
         cl = client.VentboxClient()
@@ -40,6 +40,7 @@ while True:
             if t<=6:
                 print(now()," Motor - stop")
                 desiredPower = 0
+                SLEEP_TIME = 30
             else:
                 if es.currentPower > 0:
                     print(now()," Motor - already running ")
@@ -48,6 +49,7 @@ while True:
                     if (time.time() - es.lastStopTime) > RESTART_DELAY:
                         print(now()," Motor - starting ")
                         desiredPower = ENGINE_POWER
+                        SLEEP_TIME = 0.5
                     else:
                         print(now()," Motor - not starting, delta:", (time.time() - es.lastStopTime))
                         desiredPower = 0
