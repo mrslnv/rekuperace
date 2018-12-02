@@ -20,7 +20,7 @@ class EngineState:
 
 # SLEEP_TIME = 10
 SLEEP_TIME = 10
-ENGINE_POWER = 20
+ENGINE_POWER = 19
 RESTART_DELAY = 600
 
 def now():
@@ -37,10 +37,10 @@ while True:
             print(now()," Temp:",t)
 
             desiredPower = ENGINE_POWER
-            if t<=6:
+            if t<=1.5:
                 print(now()," Motor - stop")
                 desiredPower = 0
-                SLEEP_TIME = 30
+                SLEEP_TIME = 18
             else:
                 if es.currentPower > 0:
                     print(now()," Motor - already running ")
@@ -66,4 +66,4 @@ while True:
             print(now()," Error while closing:",e)
 
     print(now()," Retry")
-    sleep(20)
+    sleep(10)
