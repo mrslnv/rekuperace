@@ -66,4 +66,4 @@ while True:
             print(now()," Error while closing:",e)
 
     print(now()," Retry")
-    sleep(10)
+    sleep(21)
