@@ -37,7 +37,7 @@ while True:
             print(now()," Temp:",t)
 
             desiredPower = ENGINE_POWER
-            if t<=1.5:
+            if t<=4.2:
                 print(now()," Motor - stop")
                 desiredPower = 0
                 SLEEP_TIME = 18
