@@ -54,16 +54,16 @@ class TestClient(AbstractClient):
         #     self.data[5*x+4] = 4.8
 
 
-        for x in range(1, 5):
+        for x in range(0, 99):
             self.data[5 * x] = 5.1
             self.data[5 * x + 1] = 5.2
-            self.data[5 * x + 2] = 4.8
+            self.data[5 * x + 2] = 4.3
             self.data[5 * x + 3] = 5.1
-            self.data[5 * x + 4] = 4.8
+            self.data[5 * x + 4] = 4.3
 
     def getTempExtIn(self) -> float:
         self.i += 1
-        t = self.data[self.i]
+        t = self.data[self.i % 500]
         return t
 
     def setPower(self, power: int):
