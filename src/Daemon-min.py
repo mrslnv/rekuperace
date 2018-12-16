@@ -20,8 +20,8 @@ class EngineState:
 
 # SLEEP_TIME = 10
 SLEEP_TIME = 10
-ENGINE_POWER = 18
-RESTART_DELAY = 600
+ENGINE_POWER = 17
+RESTART_DELAY = 400
 
 def now():
     return strftime('%H:%M:%S %d.%m.',time.localtime(time.time()))
@@ -34,10 +34,11 @@ while True:
         es = EngineState()
         while True:
             t = cl.getTempExtIn()
-            print(now()," Temp:",t)
+            h = cl.getHeater()
+            print(now()," Temp:",t, "Heat:", h)
 
             desiredPower = ENGINE_POWER
-            if t<=5.4:
+            if t<=3.7:
                 print(now()," Motor - stop")
                 desiredPower = 0
                 SLEEP_TIME = 18

@@ -30,6 +30,21 @@ class VentboxClient(AbstractClient):
         s = struct.pack('<HH', reg.registers[0], reg.registers[1])
         return struct.unpack('f', s)[0]
 
+    def getHeater(self) -> float:
+        reg = self.client.read_input_registers(16, 2)
+        s = struct.pack('<HH', reg.registers[0], reg.registers[1])
+        return struct.unpack('f', s)[0]
+
+    def getEngine1(self) -> float:
+        reg = self.client.read_input_registers(12, 2)
+        s = struct.pack('<HH', reg.registers[0], reg.registers[1])
+        return struct.unpack('f', s)[0]
+
+    def getEngine2(self) -> float:
+        reg = self.client.read_input_registers(14, 2)
+        s = struct.pack('<HH', reg.registers[0], reg.registers[1])
+        return struct.unpack('f', s)[0]
+
     def setPower(self, power: int) -> None:
         self.power = power
         s = struct.pack('>f', power)
@@ -62,6 +77,11 @@ class TestClient(AbstractClient):
             self.data[5 * x + 4] = 4.3
 
     def getTempExtIn(self) -> float:
+        self.i += 1
+        t = self.data[self.i % 500]
+        return t
+
+    def getHeater(self) -> float:
         self.i += 1
         t = self.data[self.i % 500]
         return t

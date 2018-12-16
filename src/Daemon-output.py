@@ -30,7 +30,12 @@ class DataCollector:
         self.env = env
         self.process = env.process(self.summaryProcess())
         intervals = np.array([60,120,300,600,3600,7200,5*3600,10*3600,24*3600,48*3600],np.float32)
-        self.lastPeriodPower = np.zeros([intervals.shape[0],2],np.float32)
+        # 1st coll - interval length in seconds
+        # 2nd coll - computed based on: index | -1 (calculated)
+        # 3nd coll - current interval usage
+        # 4rd coll - previous closed interval usage
+        # 5rd coll - prev prev ...
+        self.lastPeriodPower = np.zeros([intervals.shape[0],20],np.float32)
         self.lastPeriodPower[:,0] = intervals
         self.tGrad = np.zeros([intervals.shape[0],2],np.float32)
         self.tGrad[:,0] = intervals
@@ -53,12 +58,14 @@ class DataCollector:
     def changePower(self, old, new):
         if old <= 0:
             return
-        print("up",self.lastM)
-        DataCollector.updateInterval([self.lastM], 60, self.env.now - self.lastChange, old)
-        print("after up",self.lastM)
+        print("up",self.lastPeriodPower)
+        DataCollector.updatePeriodPower(self.lastPeriodPower, self.env.now - self.lastChange, old)
+        print("after up",self.lastPeriodPower)
         self.lastChange = self.env.now
 
-    def updateInterval(what, range, delta, power):
+    def updatePeriodPower(what, deltaSinceLast, power):
+        xTimes = deltaSinceLast / what[0,0]
+        for i in range(xTimes)
         what[0] = power if delta > range else (power * delta)/range
         print("new?",what[0])
 
