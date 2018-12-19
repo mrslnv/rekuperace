@@ -3,7 +3,6 @@ from time import sleep
 import time
 from time import strftime
 
-
 class EngineState:
     lastChange = time.time()
     currentPower = 0
@@ -22,8 +21,8 @@ class EngineState:
 # SLEEP_TIME = 10
 SLEEP_TIME = 10
 ENGINE_POWER = 25
-RESTART_DELAY = 200
-PRINT_DELAY = 2
+RESTART_DELAY = 180
+PRINT_DELAY = 5
 printTime = 0
 
 
@@ -45,7 +44,7 @@ while True:
             e2 = cl.getEngine2()
 
             if (time.time() - printTime) > PRINT_DELAY:
-                print(now(), " Temp: ", t, "Heat: ", h, "EngineA: ", e1, "EngineB: ", e2)
+                print(now(), " Temp: ", round(t,2), " Heat: ", round(h,2), " EngineA: ", round(e1,2), " EngineB: ", round(e2,2))
                 print(now(), " Power:", desiredPower)
                 printTime = time.time()
 
