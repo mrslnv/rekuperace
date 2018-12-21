@@ -30,14 +30,14 @@ class DataCollector:
     def __init__(self, env: Environment):
         self.env = env
         self.process = env.process(self.summaryProcess())
-        intervals = np.array([60, 120, 300, 600, 3600, 7200, 5 * 3600, 10 * 3600, 24 * 3600, 48 * 3600], np.float32)
+        intervals = np.array([60,300,600,3600,5*3600,10*3600,24*3600,48*3600],np.float32)
         # 1st coll - interval length in seconds
-        # 2nd coll - computed based on: index | -1 (calculated)
+        # 2nd coll - time % interval (if 2dn == 0, 3rd MUST be 0)
         # 3nd coll - current interval usage
         # 4rd coll - previous closed interval usage
         # 5rd coll - prev prev ...
-        self.lastPeriodPower = np.zeros([intervals.shape[0], 20], np.float32)
-        self.lastPeriodPower[:, 0] = intervals
+        self.lastPeriodPower = np.zeros([intervals.shape[0],30],np.float32)
+        self.lastPeriodPower[:,0] = intervals
         self.lastChange = 0
 
     def summaryProcess(self):
@@ -46,45 +46,52 @@ class DataCollector:
             yield self.env.timeout(DataCollector.PERIOD)
 
     def printSummary(self):
-        print("Data 123")
+        for a in range(self.lastPeriodPower.shape[0]):
+            print("Avg [ {0:3.0f} ]".format(self.lastPeriodPower[a,0]/60),end='')
+            for b in range(2,7):
+                print(" {0:3.0f}".format(self.lastPeriodPower[a,b]),end='')
+            print()
 
     def updatePower(self, old, time):
         if old <= 0:
             return
-        self.updateArray(time - self.lastChange, old)
+        # print("up",self.lastPeriodPower)
+        DataCollector.updateArray(self.lastPeriodPower, time - self.lastChange, old)
+        # print("after up",self.lastPeriodPower)
         self.lastChange = time
 
-    def updateArray(self, deltaSinceLast, power):
-        for a in range(self.lastPeriodPower.shape[0]):
-            self.updateRow(self.lastPeriodPower[a], deltaSinceLast, power)
+    def updateArray(what, deltaSinceLast, power):
+        for a in range(what.shape[0]):
+            DataCollector.updateRow(what[a], deltaSinceLast, power)
 
-    def updateRow(self, deltaSinceLast, power):
-        period = self.lastPeriodPower[0]
-        lastPortion = self.lastPeriodPower[1]
+
+    def updateRow(what, deltaSinceLast, power):
+        period = what[0]
+        lastPortion = what[1]
         newPortion = (lastPortion + deltaSinceLast) % period
         updates = math.floor((lastPortion + deltaSinceLast) / period) + 1
-        updateCoefs = np.ones(min(updates, self.lastPeriodPower.shape[0] - 2), self.lastPeriodPower.dtype)
+        updateCoefs = np.ones(min(updates, what.shape[0] - 2), what.dtype)
         if updates > 1:
-            if updates > self.lastPeriodPower.shape[0] - 2:
-                self.lastPeriodPower[2:] = 0
+            if updates > what.shape[0] - 2:
+                what[2:] = 0
                 updateCoefs[0] = newPortion / period
             else:
-                self.lastPeriodPower[updates + 1:] = self.lastPeriodPower[2:-updates + 1]
-                self.lastPeriodPower[2:updates + 1] = 0
+                what[updates + 1:] = what[2:-updates + 1]
+                what[2:updates+1] = 0
                 updateCoefs[-1] = (period - lastPortion) / period
                 updateCoefs[0] = newPortion / period
         else:
             updateCoefs[0] = (newPortion - lastPortion) / period
         newUsage = updateCoefs * power
-        self.lastPeriodPower[2:2 + updates] += newUsage
-        self.lastPeriodPower[1] = newPortion
+        what[2:2 + updates] += newUsage
+        what[1] = newPortion
 
     def updateTemperature(self, t, now):
-        # ToDo: temp gradient
+        #ToDo: temp gradient
         pass
 
     def updateHeater(self, actualHeater, now):
-        # ToDo: heat
+        #ToDo: heat
         pass
 
 
@@ -129,6 +136,7 @@ class EngineController:
             self.readTemperature()
             self.updatePower()
             self.setPower()
+            print("==> keep running ",self.desiredPower)
             yield env.timeout(self.PERIOD)
 
     def passiveProcess(self):
@@ -140,6 +148,7 @@ class EngineController:
                 self.env.process(self.activeProcess())
                 self.changePower(EngineController.ACTIVE_POWER)
                 return
+            print("==> passive ",self.desiredPower)
             yield env.timeout(self.PASSIVE_PERIOD)
 
     def activeProcess(self):
@@ -152,12 +161,13 @@ class EngineController:
                 self.lastStopTime = env.now
                 self.env.process(self.passiveProcess())
                 return
+            print("==> active ",self.desiredPower)
             yield env.timeout(self.ACTIVE_PERIOD)
 
-    def addShouldStop(self, decider):
+    def addShouldStop(self,decider):
         self.shouldStop.add(decider)
 
-    def addShouldStart(self, decider):
+    def addShouldStart(self,decider):
         self.shouldStart.add(decider)
 
     def readTemperature(self):
@@ -172,7 +182,7 @@ class EngineController:
         self.actualHeater = self.client.getHeater()
         self.dataCol.updateHeater(self.actualHeater, self.env.now)
 
-    def setPower(self) -> float:
+    def setPower(self)->float:
         self.client.setPower(self.desiredPower)
 
     def changePower(self, power):
@@ -186,27 +196,30 @@ class EngineController:
         self.actualPower = self.client.getEngine1()
         self.dataCol.updatePower(old=oldActual, time=self.env.now)
 
-
 class Deciders:
     TEMP_STOP = 0.5
-    HEATER_STOP = 0.4
-
-    def shouldStartOnlyWithDelay(ec: EngineController, dc: DataCollector) -> bool:
-        if (ec.env.now - ec.lastStopTime) > EngineController.RESTART_DELAY:
-            return True
-        return False
 
     def shouldStartTempAbove(ec: EngineController, dc: DataCollector) -> bool:
+        print("Should start? temp above:",ec.t," above ", Deciders.TEMP_STOP)
         if ec.t > Deciders.TEMP_STOP:
             return True
         return False
 
     def shouldStopTempBelow(ec: EngineController, dc: DataCollector) -> bool:
-        if ec.t < Deciders.TEMP_STOP:
+        print("Should stop? temp below:",ec.t," below ", Deciders.TEMP_STOP)
+        if ec.t <= Deciders.TEMP_STOP:
             return True
         return False
 
+    def shouldStartOnlyWithDelay(ec: EngineController, dc: DataCollector) -> bool:
+        print("Should delay? delay",ec.env.now - ec.lastStopTime)
+        if (ec.env.now - ec.lastStopTime) > EngineController.RESTART_DELAY:
+            return True
+        return False
+
+
     def shouldStopHeater(ec: EngineController, dc: DataCollector) -> bool:
+        print("Should stop heater? h=",ec.actualHeater," e= ", ec.actualPower)
         if ec.actualHeater > 0.4 and ec.actualPower == 30:
             return True
         return False
@@ -214,10 +227,11 @@ class Deciders:
 
 env = simpy.rt.RealtimeEnvironment(factor=0.03)
 
-c = EngineController(env, TestClient(), DataCollector(env))
+c = EngineController(env, TestClient(True), DataCollector(env))
 c.addShouldStop(Deciders.shouldStopTempBelow)
-c.addShouldStart(EngineController.shouldStartOnlyWithDelay)
+c.addShouldStop(Deciders.shouldStopHeater)
 c.addShouldStart(Deciders.shouldStartTempAbove)
+c.addShouldStart(Deciders.shouldStartOnlyWithDelay)
 
 env.sync()
 env.run()

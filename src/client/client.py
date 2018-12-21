@@ -91,6 +91,7 @@ class TestClient(AbstractClient):
         self.engine = 0
         self.heater = 0
         self.tDelta = 0.1
+        self.timeout = 10
 
     def log(self,*args):
         if self.shouldLog:
@@ -102,18 +103,19 @@ class TestClient(AbstractClient):
         else:
             self.tDelta += 0.1
 
-        if self.tDelta < -0.5:
+        if self.tDelta + self.getInputRegister(0) < 3.9:
             self.heater = 0.5
         else:
             self.heater = 0
 
     def getInputRegister(self, index) -> float:
+        self.i += 1
         return self.dataT[self.i % 500]
 
     def getTempExtIn(self) -> float:
         self.calculate()
 
-        t = self.getInputRegister(0) - self.tDelta
+        t = self.getInputRegister(0) + self.tDelta
         self.log("getTemp:",t)
         return t
 
@@ -125,7 +127,14 @@ class TestClient(AbstractClient):
     def getEngine1(self) -> float:
         self.calculate()
         if self.heater > 0:
-            self.engine = 30
+            if self.timeout > 0:
+                self.engine = 30
+                self.timeout -= 1
+            else:
+                self.timeout = 10
+                self.heater = 0
+                self.tDelta = 0
+                self.engine = 0
 
         self.log("getPower:",self.engine)
         return self.engine
