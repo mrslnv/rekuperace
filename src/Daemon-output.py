@@ -29,7 +29,7 @@ def now():
 
 
 class DataCollector:
-    PERIOD = 20
+    PERIOD = 60
 
     def __init__(self, env: Environment):
         self.env = env
@@ -64,12 +64,10 @@ class DataCollector:
         for a in range(self.grads.shape[0]):
             print("Grad [ {0:3.0f} ]".format(self.grads[a, 0]), end='')
             for b in range(3, self.grads.shape[1]):
-                print(" {0:3.0f}".format(self.grads[a, b]), end='')
+                print(" {0:.2f}".format(self.grads[a, b]), end='')
             print()
 
     def updatePower(self, old, time):
-        if old <= 0:
-            return
         DataCollector.updateArray(self.lastPeriodPower, time - self.lastChange, old)
         self.lastChange = time
 
@@ -120,11 +118,17 @@ class BulkDecider:
         self.dc = dc
         self.deciders = []
 
-    def should(self):
+    def shouldStart(self):
+        return self.decistionIs(False)
+
+    def shouldStop(self):
+        return self.decistionIs(True)
+
+    def decistionIs(self,what):
         for d in self.deciders:
-            if (not d(self.ec, self.dc)):
-                return False
-        return True
+            if (d(self.ec, self.dc) == what):
+                return what
+        return not what
 
     def add(self, shouldFunction):
         return self.deciders.append(shouldFunction)
@@ -165,7 +169,7 @@ class EngineController:
             self.readTemperature()
             self.readPower()
             self.readHeater()
-            if (self.shouldStart.should()):
+            if (self.shouldStart.shouldStart()):
                 self.env.process(self.activeProcess())
                 self.changePower(EngineController.ACTIVE_POWER)
                 return
@@ -177,7 +181,7 @@ class EngineController:
             self.readTemperature()
             self.readPower()
             self.readHeater()
-            if (self.shouldStop.should()):
+            if (self.shouldStop.shouldStop()):
                 self.changePower(EngineController.PASSIVE_POWER)
                 self.lastStopTime = env.now
                 self.env.process(self.passiveProcess())
@@ -243,22 +247,34 @@ class Deciders:
         return False
 
     def shouldStopHeater(ec: EngineController, dc: DataCollector) -> bool:
-        print("Should stop heater? h=", ec.actualHeater, " e= ", ec.actualPower)
+        # print("Should stop heater? h=", ec.actualHeater, " e= ", ec.actualPower)
         if ec.actualHeater > 0.4 and ec.actualPower == 30:
             return True
         return False
 
+while True:
 
-# env = simpy.rt.RealtimeEnvironment(factor=0.03)
-env = simpy.rt.RealtimeEnvironment()
+    client = True
+    try:
+        # env = simpy.rt.RealtimeEnvironment(factor=0.03)
+        env = simpy.rt.RealtimeEnvironment()
 
-# client = TestClient(True)
-client = VentboxClient()
-c = EngineController(env, client, DataCollector(env))
-c.addShouldStop(Deciders.shouldStopTempBelow)
-c.addShouldStop(Deciders.shouldStopHeater)
-c.addShouldStart(Deciders.shouldStartTempAbove)
-c.addShouldStart(Deciders.shouldStartOnlyWithDelay)
+        # client = TestClient(True)
+        client = VentboxClient()
+        c = EngineController(env, client, DataCollector(env))
+        c.addShouldStop(Deciders.shouldStopTempBelow)
+        c.addShouldStop(Deciders.shouldStopHeater)
+        c.addShouldStart(Deciders.shouldStartTempAbove)
+        c.addShouldStart(Deciders.shouldStartOnlyWithDelay)
 
-env.sync()
-env.run()
+        env.sync()
+        env.run()
+    except Exception as e:
+        print(now(), " Error:", e)
+        try:
+            client.closeReku()
+        except Exception as e2:
+            print(now(), " Error while closing:", e)
+
+    print(now(), " Retry")
+    sleep(21)

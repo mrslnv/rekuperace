@@ -23,3 +23,6 @@ def updateWhere():
     print(a)
 
 updateWhere()
+
+
+print(" {0:.2f}".format(-0.1), end='')
