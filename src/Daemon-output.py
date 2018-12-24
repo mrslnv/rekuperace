@@ -24,21 +24,31 @@ RESTART_DELAY = 600
 env = simpy.Environment()
 
 
+def now():
+    return strftime('%H:%M:%S %d.%m.', time.localtime(time.time()))
+
+
 class DataCollector:
     PERIOD = 20
 
     def __init__(self, env: Environment):
         self.env = env
         self.process = env.process(self.summaryProcess())
-        intervals = np.array([60,300,600,3600,5*3600,10*3600,24*3600,48*3600],np.float32)
+        # intervals = np.array([60, 300, 600, 3600, 5 * 3600, 10 * 3600, 24 * 3600, 48 * 3600], np.float32)
+        intervals = np.array([60, 300, 600, 3600, 5 * 3600], np.float32)
         # 1st coll - interval length in seconds
         # 2nd coll - time % interval (if 2dn == 0, 3rd MUST be 0)
         # 3nd coll - current interval usage
         # 4rd coll - previous closed interval usage
         # 5rd coll - prev prev ...
-        self.lastPeriodPower = np.zeros([intervals.shape[0],30],np.float32)
-        self.lastPeriodPower[:,0] = intervals
+        self.lastPeriodPower = np.zeros([intervals.shape[0], 30], np.float32)
+        self.lastPeriodPower[:, 0] = intervals
         self.lastChange = 0
+
+        # intervals = np.array([10, 20, 30, 60, 120])
+        intervals = np.array([10, 20, 30, 60])
+        self.grads = np.zeros((intervals.shape[0], 8))
+        self.grads[:, 0] = intervals
 
     def summaryProcess(self):
         while True:
@@ -47,23 +57,25 @@ class DataCollector:
 
     def printSummary(self):
         for a in range(self.lastPeriodPower.shape[0]):
-            print("Avg [ {0:3.0f} ]".format(self.lastPeriodPower[a,0]/60),end='')
-            for b in range(2,7):
-                print(" {0:3.0f}".format(self.lastPeriodPower[a,b]),end='')
+            print("Avg [ {0:3.0f} ]".format(self.lastPeriodPower[a, 0] / 60), end='')
+            for b in range(2, 7):
+                print(" {0:3.0f}".format(self.lastPeriodPower[a, b]), end='')
+            print()
+        for a in range(self.grads.shape[0]):
+            print("Grad [ {0:3.0f} ]".format(self.grads[a, 0]), end='')
+            for b in range(3, self.grads.shape[1]):
+                print(" {0:3.0f}".format(self.grads[a, b]), end='')
             print()
 
     def updatePower(self, old, time):
         if old <= 0:
             return
-        # print("up",self.lastPeriodPower)
         DataCollector.updateArray(self.lastPeriodPower, time - self.lastChange, old)
-        # print("after up",self.lastPeriodPower)
         self.lastChange = time
 
     def updateArray(what, deltaSinceLast, power):
         for a in range(what.shape[0]):
             DataCollector.updateRow(what[a], deltaSinceLast, power)
-
 
     def updateRow(what, deltaSinceLast, power):
         period = what[0]
@@ -77,7 +89,7 @@ class DataCollector:
                 updateCoefs[0] = newPortion / period
             else:
                 what[updates + 1:] = what[2:-updates + 1]
-                what[2:updates+1] = 0
+                what[2:updates + 1] = 0
                 updateCoefs[-1] = (period - lastPortion) / period
                 updateCoefs[0] = newPortion / period
         else:
@@ -86,12 +98,19 @@ class DataCollector:
         what[2:2 + updates] += newUsage
         what[1] = newPortion
 
-    def updateTemperature(self, t, now):
-        #ToDo: temp gradient
-        pass
+    def updateTemperature(self, temp, tm):
+        if self.grads[0, 2] == 0:
+            self.grads[:, 2] = tm
+            self.grads[:, 1] = temp
+            return
+        shift = np.sign(tm - self.grads[:, 2] - self.grads[:, 0])
+        self.grads[shift >= 0, 3:] = np.roll(self.grads[shift >= 0, 3:], 1, 1)
+        self.grads[shift >= 0, 3] = temp - self.grads[shift >= 0, 1]
+        self.grads[shift >= 0, 1] = temp
+        self.grads[shift >= 0, 2] = tm
 
     def updateHeater(self, actualHeater, now):
-        #ToDo: heat
+        # ToDo: heat
         pass
 
 
@@ -117,7 +136,7 @@ class EngineController:
     ACTIVE_POWER = 25
     PASSIVE_POWER = 0
     PASSIVE_PERIOD = 10
-    RESTART_DELAY = 60
+    RESTART_DELAY = 180
 
     def __init__(self, env: Environment, client: AbstractClient, dataCol: DataCollector):
         self.env = env
@@ -129,18 +148,20 @@ class EngineController:
         env.process(self.runEngineProcess())
         self.shouldStart = BulkDecider(self, dataCol)
         self.shouldStop = BulkDecider(self, dataCol)
-        self.lastStopTime = 0
+        self.lastStopTime = -EngineController.RESTART_DELAY
+        self.mode = ""
 
     def runEngineProcess(self):
         while True:
             self.readTemperature()
             self.updatePower()
             self.setPower()
-            print("==> keep running ",self.desiredPower)
+            self.printInfo()
             yield env.timeout(self.PERIOD)
 
     def passiveProcess(self):
         while True:
+            self.mode = "PASSIVE"
             self.readTemperature()
             self.readPower()
             self.readHeater()
@@ -148,11 +169,11 @@ class EngineController:
                 self.env.process(self.activeProcess())
                 self.changePower(EngineController.ACTIVE_POWER)
                 return
-            print("==> passive ",self.desiredPower)
             yield env.timeout(self.PASSIVE_PERIOD)
 
     def activeProcess(self):
         while True:
+            self.mode = "ACTIVE"
             self.readTemperature()
             self.readPower()
             self.readHeater()
@@ -161,13 +182,16 @@ class EngineController:
                 self.lastStopTime = env.now
                 self.env.process(self.passiveProcess())
                 return
-            print("==> active ",self.desiredPower)
             yield env.timeout(self.ACTIVE_PERIOD)
 
-    def addShouldStop(self,decider):
+    def printInfo(self):
+        print(now(), "= ", self.mode, " =>  t=", round(self.t, 1), " h=", round(self.actualHeater, 2),
+              " w=", self.actualPower, " g[10]=", round(self.dataCol.grads[0,3],2)," g[20]=",round(self.dataCol.grads[0,4],2))
+
+    def addShouldStop(self, decider):
         self.shouldStop.add(decider)
 
-    def addShouldStart(self,decider):
+    def addShouldStart(self, decider):
         self.shouldStart.add(decider)
 
     def readTemperature(self):
@@ -182,7 +206,7 @@ class EngineController:
         self.actualHeater = self.client.getHeater()
         self.dataCol.updateHeater(self.actualHeater, self.env.now)
 
-    def setPower(self)->float:
+    def setPower(self) -> float:
         self.client.setPower(self.desiredPower)
 
     def changePower(self, power):
@@ -196,38 +220,41 @@ class EngineController:
         self.actualPower = self.client.getEngine1()
         self.dataCol.updatePower(old=oldActual, time=self.env.now)
 
+
 class Deciders:
     TEMP_STOP = 0.5
 
     def shouldStartTempAbove(ec: EngineController, dc: DataCollector) -> bool:
-        print("Should start? temp above:",ec.t," above ", Deciders.TEMP_STOP)
+        # print("Should start? temp above:", ec.t, " above ", Deciders.TEMP_STOP)
         if ec.t > Deciders.TEMP_STOP:
             return True
         return False
 
     def shouldStopTempBelow(ec: EngineController, dc: DataCollector) -> bool:
-        print("Should stop? temp below:",ec.t," below ", Deciders.TEMP_STOP)
+        # print("Should stop? temp below:", ec.t, " below ", Deciders.TEMP_STOP)
         if ec.t <= Deciders.TEMP_STOP:
             return True
         return False
 
     def shouldStartOnlyWithDelay(ec: EngineController, dc: DataCollector) -> bool:
-        print("Should delay? delay",ec.env.now - ec.lastStopTime)
+        # print("Should delay? delay", ec.env.now - ec.lastStopTime)
         if (ec.env.now - ec.lastStopTime) > EngineController.RESTART_DELAY:
             return True
         return False
 
-
     def shouldStopHeater(ec: EngineController, dc: DataCollector) -> bool:
-        print("Should stop heater? h=",ec.actualHeater," e= ", ec.actualPower)
+        print("Should stop heater? h=", ec.actualHeater, " e= ", ec.actualPower)
         if ec.actualHeater > 0.4 and ec.actualPower == 30:
             return True
         return False
 
 
-env = simpy.rt.RealtimeEnvironment(factor=0.03)
+# env = simpy.rt.RealtimeEnvironment(factor=0.03)
+env = simpy.rt.RealtimeEnvironment()
 
-c = EngineController(env, TestClient(True), DataCollector(env))
+# client = TestClient(True)
+client = VentboxClient()
+c = EngineController(env, client, DataCollector(env))
 c.addShouldStop(Deciders.shouldStopTempBelow)
 c.addShouldStop(Deciders.shouldStopHeater)
 c.addShouldStart(Deciders.shouldStartTempAbove)
